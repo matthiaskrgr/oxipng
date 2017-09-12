@@ -70,6 +70,9 @@ pub struct Options {
     pub verbosity: Option<u8>,
     /// Which filters to try on the file (0-5)
     /// Default: `0,5`
+    pub summary: bool,
+    /// Wether to write summary of all optimized files
+    /// Default: false
     pub filter: HashSet<u8>,
     /// Whether to change the interlacing type of the file
     /// `None` will not change the current interlacing type
@@ -264,6 +267,7 @@ impl Default for Options {
             force: false,
             preserve_attrs: false,
             verbosity: Some(0),
+            summary: false,
             filter: filter,
             interlace: None,
             compression: compression,
@@ -283,8 +287,10 @@ impl Default for Options {
     }
 }
 
+
+
 /// Perform optimization on the input file using the options provided
-pub fn optimize(filepath: &Path, opts: &Options) -> Result<(), PngError> {
+pub fn optimize(filepath: &Path, opts: &Options) -> Result<(usize, usize), PngError> {
     // Initialize the thread pool with correct number of threads
     let thread_count = opts.threads;
     let _ = rayon::initialize(rayon::Configuration::new().num_threads(thread_count));
@@ -301,10 +307,17 @@ pub fn optimize(filepath: &Path, opts: &Options) -> Result<(), PngError> {
     // Run the optimizer on the decoded PNG.
     let optimized_output = optimize_png(&mut png, &in_data, opts)?;
 
-    if is_fully_optimized(in_data.len(), optimized_output.len(), opts) {
+    let size_before = in_data.len();
+    let size_after = optimized_output.len();
+    
+
+    if is_fully_optimized(size_before, size_after, opts) {
         eprintln!("File already optimized");
-        return Ok(());
+        return Ok((0, 0)); // file was not saved?  handle this better
     }
+
+    let saving = size_before - size_after;
+    println!("saving {}", saving);
 
     if opts.pretend {
         if opts.verbosity.is_some() {
@@ -391,7 +404,8 @@ pub fn optimize(filepath: &Path, opts: &Options) -> Result<(), PngError> {
             }
         }
     }
-    Ok(())
+    
+    Ok((size_before, size_after))
 }
 
 /// Perform optimization on the input file using the options provided, where the file is already

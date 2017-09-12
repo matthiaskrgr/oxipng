@@ -97,6 +97,10 @@ fn main() {
             .short("v")
             .long("verbose")
             .conflicts_with("quiet"))
+        .arg(Arg::with_name("summary")
+            .help("Show summary after processing all files")
+            .short("S")
+            .long("summary"))
         .arg(Arg::with_name("filters")
             .help("PNG delta filters (0-5) - Default: 0,5")
             .short("f")
@@ -242,6 +246,8 @@ fn main() {
 }
 
 fn handle_optimization(inputs: Vec<PathBuf>, opts: &Options) {
+    let mut total_size_before: isize = 0;
+    let mut total_size_after: isize = 0;
     for input in inputs {
         let mut current_opts = opts.clone();
         if input.is_dir() {
@@ -265,11 +271,24 @@ fn handle_optimization(inputs: Vec<PathBuf>, opts: &Options) {
             current_opts.out_file = input.clone();
         }
         match oxipng::optimize(&input, &current_opts) {
-            Ok(_) => (),
+            Ok(our_tupel) => {
+                let (size_before, size_after) = our_tupel;
+                total_size_before = total_size_before + size_before as isize;
+                total_size_after = total_size_after + size_after as isize;
+            }
             Err(x) => {
                 eprintln!("{}", x);
             }
         };
+    }
+    if opts.summary {
+        let total_diff = total_size_after - total_size_before;
+        let sign = if total_size_after < total_size_before {
+            " "
+            } else if total_size_after > total_size_before {
+            "+"
+            } else { " " };
+        println!("before: {}, after: {}, diff:  {}{}", total_size_before, total_size_after, sign, total_diff);
     }
 }
 
@@ -383,6 +402,10 @@ fn parse_opts_into_struct(matches: &ArgMatches) -> Result<Options, String> {
 
     if matches.is_present("verbose") {
         opts.verbosity = Some(1);
+    }
+
+    if matches.is_present("summary") {
+        opts.summary = true;
     }
 
     if matches.is_present("no-bit-reduction") {
